@@ -1,8 +1,8 @@
 scikit-learn==1.6.1
-pandas
-numpy
-nltk
-streamlit
+pandas==2.2.2
+numpy==2.0.2
 joblib
-scipy
+streamlit
 requests
+nltk
+scipy
