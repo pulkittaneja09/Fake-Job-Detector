@@ -5,28 +5,65 @@ import joblib
 import pickle
 import re
 from nltk.stem.porter import PorterStemmer
+import requests
+import os
 
-# --- 1. LOAD THE SAVED ARTIFACTS ---
+# --- 1. FUNCTION TO DOWNLOAD FILE FROM GOOGLE DRIVE ---
+def download_file_from_google_drive(id, destination):
+    URL = "https://docs.google.com/uc?export=download&confirm=1"
+    session = requests.Session()
+    response = session.get(URL, params={'id': id}, stream=True)
+    token = get_confirm_token(response)
+    if token:
+        params = {'id': id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+    save_response_content(response, destination)
 
-# Load the trained machine learning model
-model = joblib.load("model.pkl")
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+    return None
 
-# Load the label encoders
-with open('label_encoders.pkl', 'rb') as f:
-    label_encoders = pickle.load(f)
+def save_response_content(response, destination):
+    CHUNK_SIZE = 32768
+    with st.spinner(f"Downloading {destination}... This may take a moment."):
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
 
-# Load the scaler
-scaler = joblib.load("scaler.pkl")
+# --- 2. CACHED FUNCTION TO LOAD ARTIFACTS ---
+@st.cache_resource
+def load_artifacts():
+    # --- File names and your Google Drive File IDs ---
+    artifacts = {
+        "glove_embeddings.pkl": "1rh8SYgsPj6noUAa2FPAEjDsnefcvhF4e", # <-- PASTE YOUR IDs HERE
+        "model.pkl": "1qbSfQYyDX_2qVZKvZMBX8-0jMiWEFeXv",
+        "label_encoders.pkl": "1R_nFPKFwKYx4YgOnvXDPwCfQgkI27wsu",
+        "scaler.pkl": "1de7qyWW5S3eJc8nt0Qo3HN7OHLnVeKUi"
+    }
 
-# Load the GloVe embeddings dictionary
-with open('glove_embeddings.pkl', 'rb') as f:
-    embeddings_index = pickle.load(f)
+    # Download files if they don't exist
+    for filename, file_id in artifacts.items():
+        if not os.path.exists(filename):
+            download_file_from_google_drive(file_id, filename)
 
+    # Load artifacts from disk
+    model = joblib.load("model.pkl")
+    with open('label_encoders.pkl', 'rb') as f:
+        label_encoders = pickle.load(f)
+    scaler = joblib.load("scaler.pkl")
+    with open('glove_embeddings.pkl', 'rb') as f:
+        embeddings_index = pickle.load(f)
+    
+    return model, label_encoders, scaler, embeddings_index
+
+# --- Main app logic starts here ---
+model, label_encoders, scaler, embeddings_index = load_artifacts()
 glove_words = set(embeddings_index.keys())
 
-# --- 2. DEFINE THE PREPROCESSING FUNCTIONS ---
-# These functions must be IDENTICAL to the ones you used for training
-
+# The rest of your code (preprocessing, UI, etc.) stays below this
 def final_preprocess(text):
     text = text.replace('\\r', ' ')
     text = text.replace('\\"', ' ')
